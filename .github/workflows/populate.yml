@@ -2,6 +2,8 @@ name: Populate skills
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/populate.yml'
 jobs:
   populate:
     runs-on: ubuntu-latest
@@ -9,13 +11,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Copy skills
+      - name: Copy skills from obra/superpowers
         run: |
-          git clone --depth=1 https://github.com/nicolasaudran/eukles-kpi-commerce.git /tmp/eukles
-          mkdir -p skills .claude/hooks
-          cp -r /tmp/eukles/.claude/skills/* skills/
-          cp /tmp/eukles/.claude/hooks/session-start.sh .claude/hooks/
-          cp /tmp/eukles/.claude/settings.json .claude/settings.json
+          git clone --depth=1 https://github.com/obra/superpowers.git /tmp/sp
+          for skill in using-superpowers brainstorming test-driven-development writing-plans executing-plans systematic-debugging verification-before-completion; do
+            mkdir -p "skills/$skill"
+            find "/tmp/sp/skills/$skill" -name "*.md" | xargs -I{} cp {} "skills/$skill/"
+          done
+          mkdir -p .claude/hooks
+          printf '#!/bin/bash\nset -euo pipefail\nif [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then exit 0; fi\necho "Installing Superpowers skills..."\ngit clone --depth=1 https://github.com/nicolasaudran/claude-dotfiles.git /tmp/cdotfiles 2>/dev/null\nmkdir -p ~/.claude/skills\ncp -r /tmp/cdotfiles/skills/* ~/.claude/skills/\nrm -rf /tmp/cdotfiles\necho "Done."\n' > .claude/hooks/session-start.sh
+          chmod +x .claude/hooks/session-start.sh
+          printf '{\n  "hooks": {\n    "SessionStart": [{\n      "hooks": [{\n        "type": "command",\n        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"\n      }]\n    }]\n  }\n}\n' > .claude/settings.json
       - name: Commit
         run: |
           git config user.email "actions@github.com"
